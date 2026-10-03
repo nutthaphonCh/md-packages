@@ -208,13 +208,19 @@ def _plan_one(plan: ResolutionPlan, *, entrypoints: tuple[str, ...]) -> Material
 
 def _plan_locked(scope: Path, *, entrypoints: tuple[str, ...]) -> MaterializationPlan:
     artifacts, routes, metadata = _locked_view(scope)
+    owned_outputs = (read_lock(scope) or {}).get("outputs", {})
+    remembered_entrypoints = tuple(
+        path for path in ("AGENTS.md", "CLAUDE.md")
+        if isinstance(owned_outputs, dict) and path in owned_outputs
+    )
+    replay_entrypoints = tuple(dict.fromkeys((*remembered_entrypoints, *entrypoints)))
     artifacts_map = {item.identity: {"target": item.target} for item in artifacts}
     routes_map = {item.key: _route_dict(item) for item in routes}
     validate_routes(routes_map, artifacts_map)
     local_routes = {item.key: _route_dict(item) for item in load_manifest(scope / "md-package.json").routes}
     return plan_materialization(scope, _locked_outputs(scope, metadata), effective_routes=routes_map,
                                 scope_routes=local_routes, artifacts=artifacts_map,
-                                entrypoints=entrypoints, lock_metadata={"resolution": metadata})
+                                entrypoints=replay_entrypoints, lock_metadata={"resolution": metadata})
 
 
 def _locked_scope_tree(scope: Path) -> list[Path]:

@@ -88,6 +88,16 @@ class CliTests(unittest.TestCase):
         self.assertIn("locked source hash changed", result.stderr)
         self.assertEqual((self.scope / "skills" / "sample" / "SKILL.md").read_text(), "# Sample\n")
 
+    def test_locked_replay_preserves_managed_entrypoint_without_redeclaring_flag(self) -> None:
+        first = self.run_cli("install", "--patch-entrypoint", "AGENTS.md")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        entrypoint = self.scope / "AGENTS.md"
+        before = entrypoint.read_bytes()
+        replay = self.run_cli("install", "--locked")
+        self.assertEqual(replay.returncode, 0, replay.stderr)
+        self.assertTrue(entrypoint.exists())
+        self.assertEqual(entrypoint.read_bytes(), before)
+
     def test_nested_all_and_replay_from_subdirectory(self) -> None:
         child = self.scope / "child"
         child.mkdir()
