@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "md-packages"
+version = "0.1.0.dev0"
+description = "Recursive Markdown packages for agent skills, routers, wikis, ADRs, and docs"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "md-packages contributors" }]
+dependencies = []
+
+[project.scripts]
+mdpkg = "md_packages.cli:main"
+md = "md_packages.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.data-files]
+"share/md-packages/schemas" = ["schemas/md-package.schema.json", "schemas/md-lock.schema.json"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

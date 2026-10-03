@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Generated local state when this repository consumes itself.
+/.md-lock.json
+/.md/
+/skills/
+/wiki/
+/adr/
+/router-extension.md
+/ROUTER.md
+/.agents/skills/
+/.claude/skills/

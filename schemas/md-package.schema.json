@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/nutthaphonCh/md-packages/main/schemas/md-package.schema.json",
+  "title": "md-package manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "maxParentDepth": { "type": "integer", "minimum": 0 },
+    "registry": { "type": "object", "additionalProperties": { "oneOf": [ { "type": "string", "minLength": 1 }, { "type": "object", "additionalProperties": false, "required": ["path"], "properties": { "path": { "type": "string", "minLength": 1 } } } ] } },
+    "imports": { "type": "array", "items": { "oneOf": [ { "type": "string", "minLength": 1 }, { "type": "object", "additionalProperties": false, "required": ["package"], "properties": { "package": { "type": "string", "minLength": 1 }, "mode": { "enum": ["flatten", "nest"] } } } ] } },
+    "nest": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["path"], "properties": { "path": { "type": "string", "minLength": 1 }, "package": { "type": "string", "minLength": 1 } } } },
+    "artifacts": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["kind", "key", "source"], "properties": { "kind": { "type": "string", "minLength": 1 }, "key": { "type": "string", "minLength": 1 }, "source": { "type": "string", "minLength": 1 }, "target": { "type": "string", "minLength": 1 } } } },
+    "routing": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": false, "properties": { "when": { "type": "string" }, "read": { "type": "array", "items": { "type": "string", "minLength": 1 } }, "disabled": { "type": "boolean" } } } }
+  }
+}

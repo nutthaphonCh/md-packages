@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/nutthaphonCh/md-packages/main/schemas/md-lock.schema.json",
+  "title": "mdpkg installation lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "outputs"],
+  "properties": {
+    "version": {"const": 1},
+    "outputs": {
+      "type": "object",
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {
+        "oneOf": [
+          {"$ref": "#/$defs/hash"},
+          {"type": "object", "additionalProperties": false, "required": ["sha256"],
+           "properties": {"sha256": {"$ref": "#/$defs/hash"}, "mode": {"type": "integer", "minimum": 0, "maximum": 511}}}
+        ]
+      }
+    },
+    "resolution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifacts", "routes", "manifests", "replaced"],
+      "properties": {
+        "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+        "routes": {"type": "array", "items": {"$ref": "#/$defs/route"}},
+        "manifests": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+          "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/hash"}}
+        }},
+        "replaced": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false, "required": ["identity", "previous_scope", "previous"],
+          "properties": {"identity": {"type": "string"}, "previous_scope": {"type": "string"}, "previous": {"type": "object"}}
+        }}
+      }
+    }
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "key", "target", "source", "hash", "sourcePath"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1}, "key": {"type": "string", "minLength": 1},
+        "target": {"type": "string", "minLength": 1}, "source": {"type": "string", "minLength": 1},
+        "hash": {"$ref": "#/$defs/hash"}, "sourcePath": {"type": "string", "minLength": 1}
+      }
+    },
+    "route": {
+      "type": "object", "additionalProperties": false, "required": ["key", "when", "read", "disabled"],
+      "properties": {
+        "key": {"type": "string", "minLength": 1}, "when": {"type": ["string", "null"]},
+        "read": {"type": "array", "items": {"type": "string"}}, "disabled": {"type": "boolean"}
+      }
+    }
+  }
+}
