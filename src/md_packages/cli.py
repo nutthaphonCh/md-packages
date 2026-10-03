@@ -13,6 +13,7 @@ from .errors import MdPackageError
 from .manifest import load_manifest
 from .materialize import MaterializationError, read_lock, is_materialized
 from .hashing import tree_hash
+from .migration import MigrationError, apply_migration, load_migration_plan, plan_migration, save_migration_plan
 from .promotion import PromotionError, apply_promotion, content_hash, load_plan, plan_promotion, save_plan
 from .routing import RouteValidationError
 from .service import ServiceError, doctor, install, lookup, recover, resolved_view, scope_path
@@ -52,7 +53,16 @@ def _parser() -> argparse.ArgumentParser:
     promote.add_argument("--dry-run", action="store_true")
     promote.add_argument("--plan", metavar="FILE", help="save a preconditioned plan for later apply")
     promote.add_argument("--scope", default=".", metavar="PATH", help="scope used to resolve identities")
-    apply = commands.add_parser("apply", help="apply a saved promotion plan")
+    migrate = commands.add_parser("migrate", help="move or copy authored artifacts into a repository scope")
+    migrate.add_argument("operands", nargs="+", help="one or more sources followed by destination")
+    migrate.add_argument("--scope", default=".", metavar="PATH")
+    migrate.add_argument("--as", dest="as_identity", metavar="KIND/KEY")
+    migrate.add_argument("--with-route", action="append", default=[], metavar="KEY")
+    migrate.add_argument("--register", metavar="MANIFEST")
+    migrate.add_argument("--copy", action="store_true")
+    migrate.add_argument("--dry-run", action="store_true")
+    migrate.add_argument("--plan", metavar="FILE")
+    apply = commands.add_parser("apply", help="apply a saved promotion or migration plan")
     apply.add_argument("plan", metavar="FILE")
     return parser
 
@@ -151,7 +161,24 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         return recover(args.path)
     if args.command == "promote":
         return _promote(args)
+    if args.command == "migrate":
+        if len(args.operands) < 2:
+            raise MigrationError("migrate requires at least one source and a destination")
+        if args.dry_run and args.plan:
+            raise MigrationError("--dry-run and --plan cannot be combined because --plan writes a file")
+        plan = plan_migration(args.operands[:-1], args.operands[-1], scope=args.scope,
+                              as_identity=args.as_identity, with_routes=tuple(args.with_route),
+                              registry_manifest=args.register, copy_mode=args.copy)
+        if args.plan:
+            save_migration_plan(plan, args.plan)
+            return {"savedPlan": str(Path(args.plan).resolve()), "plan": plan}
+        if args.dry_run:
+            return {"dryRun": True, "plan": plan}
+        return {"plan": plan, "result": apply_migration(plan)}
     if args.command == "apply":
+        value = json.loads(Path(args.plan).read_text(encoding="utf-8"))
+        if isinstance(value, dict) and value.get("kind") == "migration":
+            return apply_migration(load_migration_plan(args.plan))
         return apply_promotion(load_plan(args.plan))
     raise ServiceError(f"unsupported command: {args.command}")
 
@@ -183,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("mdpkg: interrupted", file=sys.stderr)
         return 130
-    except (MdPackageError, MaterializationError, PromotionError, RouteValidationError,
+    except (MdPackageError, MaterializationError, PromotionError, MigrationError, RouteValidationError,
             ScopeLockError, OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
         print(f"mdpkg: {exc}", file=sys.stderr)
         return 2

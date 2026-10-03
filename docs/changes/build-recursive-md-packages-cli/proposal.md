@@ -20,6 +20,9 @@ resolved installations, and portable package definitions distinct.
 - Add recovery-safe transaction journals and exclusive scope locks.
 - Add `mdpkg promote` to adopt or promote local authored artifacts and explicit
   materialized forks into a repository-owned package.
+- Add `mdpkg migrate <sources...> <destination>` for recovery-safe batch moves
+  or copies between authored package scopes, including explicit route and
+  registry transfer.
 - Package the tool as a Python wheel/source distribution. Standalone native
   bundles and publishing are deferred.
 

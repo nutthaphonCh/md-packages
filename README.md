@@ -24,7 +24,8 @@ Implemented:
 - deterministic `.md-lock.json`, `ROUTER.md`, and `router-extension.md`;
 - copied Codex/Claude skill discovery for portable MVP installations;
 - journaled materialization, recovery, locked replay, and dry-run;
-- authored and explicit materialized-fork promotion to repository packages.
+- authored and explicit materialized-fork promotion to repository packages;
+- batch migration of authored artifacts between package scopes.
 
 Current safety-oriented limitations:
 
@@ -146,6 +147,30 @@ back to their pinned authored source automatically. `mdpkg recover` rolls back
 unfinished installation and promotion journals; repeated recovery is safe.
 Promotion moves across filesystems are not supported and fail before removing
 the source. Recovery journals retain backups locally under `.md/transactions`.
+
+Move one or more authored artifacts into another package scope. The final
+operand is the destination, and move is the default:
+
+```sh
+mdpkg migrate skills/code-principles wiki/engineering ~/work
+
+mdpkg migrate ./local-standard ~/work \
+  --as skills/code-principles \
+  --dry-run
+```
+
+Use `--copy` to retain source payloads and declarations. A route that reads a
+moved artifact must be selected explicitly with `--with-route KEY`, otherwise
+the migration fails before mutation. `--register MANIFEST` can add the
+destination package to a registry. `--plan FILE` saves a hash- and
+mode-preconditioned plan for later `mdpkg apply FILE`.
+
+`migrate` accepts authored identities resolved from `--scope` or explicit
+authored paths. Arbitrary Markdown files default to `docs/<filename>`; a
+directory or non-Markdown file needs `--as KIND/KEY`. Generated, materialized,
+symlinked, overlapping, stale, or conflicting inputs are rejected. Migration
+does not reinstall consumer scopes automatically; run `mdpkg install` where the
+new package should be materialized.
 
 ## Development
 

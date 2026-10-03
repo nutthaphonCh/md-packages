@@ -66,6 +66,26 @@ captures changed bytes as a fork with origin/base-hash provenance.
 Promotion supports dry-run and saved plans with precondition hashes. It never
 stages, commits, pushes, or publishes Git changes.
 
+## Migration
+
+`mdpkg migrate <sources...> <destination>` treats the final operand as the
+destination scope and migrates all preceding operands as one preflighted batch.
+Move is the default; `--copy` preserves source payloads and declarations.
+Sources may be authored identities resolved from `--scope` or explicit authored
+paths. A single arbitrary source can receive an identity with `--as KIND/KEY`.
+
+The planner preserves artifact identity and target metadata, rejects overlaps,
+symlinks, generated/materialized paths, case-fold collisions, target-prefix
+collisions, stale hashes/modes, and destination ownership conflicts. Routes do
+not move implicitly: a move that would leave a route dangling fails unless the
+route is selected with `--with-route`. Registry edits are likewise explicit.
+
+Saved migration plans include all source, destination, manifest, hash, and mode
+preconditions. Apply re-plans under canonical scope locks, stages destination
+payloads first, writes manifests, removes move sources last, and records all
+replacements in a destination-owned recovery journal. Recovery is repeatable.
+Migration reports affected scopes but deliberately does not reinstall consumers.
+
 ## CLI and packaging
 
 Python 3.11+ standard-library runtime, `argparse` CLI, setuptools build. `mdpkg`

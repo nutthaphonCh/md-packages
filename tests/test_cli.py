@@ -120,6 +120,31 @@ class CliTests(unittest.TestCase):
         listed = json.loads(self.run_cli("--json", "list").stdout)
         self.assertEqual({f"{x['kind']}/{x['key']}" for x in listed["artifacts"]}, {"skills/sample", "docs/draft"})
 
+    def test_migrate_operand_split_plan_and_apply(self) -> None:
+        destination = self.root / "work"
+        destination.mkdir()
+        (destination / "md-package.json").write_text('{"version": 1}\n')
+        note = self.scope / "notes.md"
+        note.write_text("# Notes\n")
+        missing = self.run_cli("migrate", "skills/sample")
+        self.assertNotEqual(missing.returncode, 0)
+        dry = self.run_cli("--json", "migrate", "skills/sample", str(note), str(destination),
+                           "--scope", str(self.scope), "--copy", "--dry-run")
+        self.assertEqual(dry.returncode, 0, dry.stderr)
+        planned = json.loads(dry.stdout)["plan"]
+        self.assertEqual([item["identity"] for item in planned["payloadOperations"]],
+                         ["skills/sample", "docs/notes"])
+        self.assertFalse((destination / "packages").exists())
+        saved = self.root / "migration.json"
+        result = self.run_cli("migrate", "skills/sample", str(note), str(destination),
+                              "--scope", str(self.scope), "--copy", "--plan", str(saved))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        applied = self.run_cli("apply", str(saved))
+        self.assertEqual(applied.returncode, 0, applied.stderr)
+        self.assertTrue((destination / "packages/skills/sample/SKILL.md").exists())
+        self.assertTrue((destination / "packages/docs/notes.md").exists())
+        self.assertTrue(note.exists())
+
     def test_promote_materialized_capture_requires_explicit_flag(self) -> None:
         self.assertEqual(self.run_cli("install").returncode, 0)
         materialized = self.scope / "skills" / "sample"
