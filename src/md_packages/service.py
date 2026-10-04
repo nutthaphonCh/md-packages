@@ -104,6 +104,15 @@ def _outputs(artifacts: tuple[Artifact, ...]) -> dict[str, PlannedOutput]:
     return outputs
 
 
+def _remembered_entrypoints(scope: Path, requested: tuple[str, ...]) -> tuple[str, ...]:
+    owned_outputs = (read_lock(scope) or {}).get("outputs", {})
+    remembered = tuple(
+        path for path in ("AGENTS.md", "CLAUDE.md")
+        if isinstance(owned_outputs, dict) and path in owned_outputs
+    )
+    return tuple(dict.fromkeys((*remembered, *requested)))
+
+
 def _resolution_metadata(plan: ResolutionPlan, scope: Path) -> dict[str, Any]:
     sources = []
     for artifact in plan.artifacts:
@@ -190,6 +199,7 @@ def _locked_outputs(scope: Path, metadata: dict[str, Any]) -> dict[str, PlannedO
 
 def _plan_one(plan: ResolutionPlan, *, entrypoints: tuple[str, ...]) -> MaterializationPlan:
     scope = nearest_scope(plan)
+    replay_entrypoints = _remembered_entrypoints(scope, entrypoints)
     for artifact in plan.artifacts:
         source = _source_path(artifact)
         overlaps = any(source == target or source.is_relative_to(target) or target.is_relative_to(source)
@@ -200,18 +210,13 @@ def _plan_one(plan: ResolutionPlan, *, entrypoints: tuple[str, ...]) -> Material
     routes = {item.key: _route_dict(item) for item in plan.routes}
     validate_routes(routes, artifacts)
     return plan_materialization(scope, _outputs(plan.artifacts), effective_routes=routes,
-                                artifacts=artifacts, entrypoints=entrypoints,
+                                artifacts=artifacts, entrypoints=replay_entrypoints,
                                 lock_metadata={"resolution": _resolution_metadata(plan, scope)})
 
 
 def _plan_locked(scope: Path, *, entrypoints: tuple[str, ...]) -> MaterializationPlan:
     artifacts, routes, metadata = _locked_view(scope)
-    owned_outputs = (read_lock(scope) or {}).get("outputs", {})
-    remembered_entrypoints = tuple(
-        path for path in ("AGENTS.md", "CLAUDE.md")
-        if isinstance(owned_outputs, dict) and path in owned_outputs
-    )
-    replay_entrypoints = tuple(dict.fromkeys((*remembered_entrypoints, *entrypoints)))
+    replay_entrypoints = _remembered_entrypoints(scope, entrypoints)
     artifacts_map = {item.identity: {"target": item.target} for item in artifacts}
     routes_map = {item.key: _route_dict(item) for item in routes}
     validate_routes(routes_map, artifacts_map)
