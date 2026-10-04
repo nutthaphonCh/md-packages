@@ -117,16 +117,8 @@ def _render(title: str, routes: Mapping[str, Any] | Sequence[Mapping[str, Any]] 
 
 
 def render_router_extension(
-    scope_routes: Mapping[str, Any] | Sequence[Mapping[str, Any]] | None,
-    artifacts: Mapping[str, Any] | None = None,
-) -> bytes:
-    """Render a scope-local ``router-extension.md`` deterministically."""
-    return _render("Scope router extension", scope_routes, artifacts).encode("utf-8")
-
-
-def render_router(
     effective_routes: Mapping[str, Any] | Sequence[Mapping[str, Any]] | None,
     artifacts: Mapping[str, Any] | None = None,
 ) -> bytes:
-    """Render the effective ``ROUTER.md`` deterministically."""
-    return _render("Router", effective_routes, artifacts).encode("utf-8")
+    """Render effective package routes into provider-neutral ``ROUTER-EXTENSION.md``."""
+    return _render("Router extension", effective_routes, artifacts).encode("utf-8")

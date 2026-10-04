@@ -21,7 +21,7 @@ Implemented:
 - skills, wiki, ADRs, docs, and arbitrary artifact kinds;
 - whole-record child overrides and tombstones;
 - key, case-folded path, prefix-path, ownership, and hash conflict checks;
-- deterministic `.md-lock.json`, `ROUTER.md`, and `router-extension.md`;
+- deterministic `.md-lock.json` and provider-neutral `ROUTER-EXTENSION.md`;
 - copied Codex/Claude skill discovery for portable MVP installations;
 - journaled materialization, recovery, locked replay, and dry-run;
 - authored and explicit materialized-fork promotion to repository packages;
@@ -63,6 +63,7 @@ separate:
 ```text
 workspace/
 ├─ md-package.json             # authored declarations
+├─ ROUTER.md                   # repository-owned local routing
 ├─ packages/                   # authored sources
 │  ├─ skills/
 │  ├─ wiki/
@@ -71,9 +72,13 @@ workspace/
 ├─ skills/                     # generated effective artifacts
 ├─ wiki/                       # generated effective artifacts
 ├─ adr/                        # generated effective artifacts
-├─ ROUTER.md                   # generated effective routing
-└─ router-extension.md         # generated current-scope routing
+└─ ROUTER-EXTENSION.md         # generated effective package routing
 ```
+
+`ROUTER.md` is the repository's stable local entrypoint. It may link to local
+wiki, ADRs, docs, and—without naming a package manager—to
+`ROUTER-EXTENSION.md` when that file exists. mdpkg owns only the extension file;
+its lock hash prevents overwriting an unmanaged or locally modified extension.
 
 Example `md-package.json`:
 

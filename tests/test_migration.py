@@ -126,9 +126,9 @@ class MigrationTests(unittest.TestCase):
         (target / "SKILL.md").write_text("other")
         with self.assertRaises(MigrationError):
             plan_migration(["skills/review"], self.destination, scope=self.source)
-        (self.source / "ROUTER.md").write_text("generated")
+        (self.source / "ROUTER-EXTENSION.md").write_text("generated")
         with self.assertRaises(MigrationError):
-            plan_migration([str(self.source / "ROUTER.md")], self.destination, scope=self.source,
+            plan_migration([str(self.source / "ROUTER-EXTENSION.md")], self.destination, scope=self.source,
                            as_identity="docs/router")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.rename(target.parent / "Review")

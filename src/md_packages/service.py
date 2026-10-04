@@ -198,12 +198,10 @@ def _plan_one(plan: ResolutionPlan, *, entrypoints: tuple[str, ...]) -> Material
             raise ServiceError(f"{artifact.identity}: generated content cannot be an authored source; promote it first")
     artifacts = {item.identity: {"target": item.target} for item in plan.artifacts}
     routes = {item.key: _route_dict(item) for item in plan.routes}
-    local = load_manifest(scope / "md-package.json")
-    scope_routes = {item.key: _route_dict(item) for item in local.routes}
     validate_routes(routes, artifacts)
     return plan_materialization(scope, _outputs(plan.artifacts), effective_routes=routes,
-                                scope_routes=scope_routes, artifacts=artifacts,
-                                entrypoints=entrypoints, lock_metadata={"resolution": _resolution_metadata(plan, scope)})
+                                artifacts=artifacts, entrypoints=entrypoints,
+                                lock_metadata={"resolution": _resolution_metadata(plan, scope)})
 
 
 def _plan_locked(scope: Path, *, entrypoints: tuple[str, ...]) -> MaterializationPlan:
@@ -217,10 +215,9 @@ def _plan_locked(scope: Path, *, entrypoints: tuple[str, ...]) -> Materializatio
     artifacts_map = {item.identity: {"target": item.target} for item in artifacts}
     routes_map = {item.key: _route_dict(item) for item in routes}
     validate_routes(routes_map, artifacts_map)
-    local_routes = {item.key: _route_dict(item) for item in load_manifest(scope / "md-package.json").routes}
     return plan_materialization(scope, _locked_outputs(scope, metadata), effective_routes=routes_map,
-                                scope_routes=local_routes, artifacts=artifacts_map,
-                                entrypoints=replay_entrypoints, lock_metadata={"resolution": metadata})
+                                artifacts=artifacts_map, entrypoints=replay_entrypoints,
+                                lock_metadata={"resolution": metadata})
 
 
 def _locked_scope_tree(scope: Path) -> list[Path]:

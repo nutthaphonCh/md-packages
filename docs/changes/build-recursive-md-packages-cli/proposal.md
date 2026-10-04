@@ -13,8 +13,11 @@ resolved installations, and portable package definitions distinct.
 - Create the standalone `mdpkg` CLI with an optional `md` alias.
 - Resolve `md-package.json` scopes upward within a bounded depth and materialize
   recursive `flatten` and `nest` package graphs downward.
-- Generate `.md-lock.json`, artifact folders, agent discovery links,
-  `ROUTER.md`, and `router-extension.md` with hashes and provenance.
+- Generate `.md-lock.json`, artifact folders, agent discovery links, and the
+  provider-neutral `ROUTER-EXTENSION.md` slot with hashes and provenance.
+- Leave the repository-owned `ROUTER.md` untouched; it may route local
+  knowledge and optionally point to `ROUTER-EXTENSION.md` without knowing which
+  package manager currently owns that extension file.
 - Reject key, normalized target-path, prefix-path, and content ownership
   conflicts before mutation.
 - Add recovery-safe transaction journals and exclusive scope locks.

@@ -209,7 +209,7 @@ def _source(operand: str, scope: Path, as_identity: str | None) -> dict[str, Any
         safe_path(path.parent, path)
     if path.is_relative_to(scope) and is_materialized(scope, path):
         raise MigrationError(f"generated or materialized source requires explicit capture: {path}")
-    if any(part in {".agents", ".claude", ".md"} for part in path.parts) or path.name in {"ROUTER.md", "router-extension.md", ".md-lock.json"}:
+    if any(part in {".agents", ".claude", ".md"} for part in path.parts) or path.name in {"ROUTER-EXTENSION.md", "router-extension.md", ".md-lock.json"}:
         raise MigrationError(f"generated source is unsafe: {path}")
     digest = content_hash(path)
     return {"operand": str(path) if resolved_identity is None else operand,
