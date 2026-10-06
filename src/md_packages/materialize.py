@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable, Mapping
 
-from .routing import render_router, render_router_extension
+from .routing import render_router_extension
 from .transaction import Journal, ScopeLocks, canonical_scope_paths, safe_path, replace_durable, sync_payload, sync_directory
 
 
@@ -74,7 +74,7 @@ def is_materialized(scope: Path, source: Path) -> bool:
     """Recognize generated roots, descendants, and directories containing them."""
     source = source.resolve()
     lock = read_lock(scope) or {}
-    names = {"ROUTER.md", "router-extension.md", ".md-lock.json", ".md", ".agents/skills", ".claude/skills"}
+    names = {"ROUTER-EXTENSION.md", "router-extension.md", ".md-lock.json", ".md", ".agents/skills", ".claude/skills"}
     names.update(lock.get("outputs", {}))
     names.update(item["target"] for item in lock.get("resolution", {}).get("artifacts", []))
     return any(source == target or source.is_relative_to(target) or target.is_relative_to(source)
@@ -86,8 +86,6 @@ def router_block(router_relative: str = "ROUTER.md") -> str:
     return (
         "<!-- md:router:start -->\n"
         f"Read [{relative}]({relative}).\n\n"
-        "If it is missing, run:\n\n"
-        "    mdpkg install --locked\n"
         "<!-- md:router:end -->\n"
     )
 
@@ -141,7 +139,6 @@ def plan_materialization(
     *,
     previous_lock: Mapping[str, Any] | None = None,
     effective_routes: Mapping[str, Any] | list[Mapping[str, Any]] | None = None,
-    scope_routes: Mapping[str, Any] | list[Mapping[str, Any]] | None = None,
     artifacts: Mapping[str, Any] | None = None,
     entrypoints: Mapping[str, str] | Iterable[str] | None = None,
     lock_metadata: Mapping[str, Any] | None = None,
@@ -157,9 +154,7 @@ def plan_materialization(
             content = content.content
         generated[_safe_relative(str(path))] = content.encode("utf-8") if isinstance(content, str) else bytes(content)
     if effective_routes is not None:
-        generated["ROUTER.md"] = render_router(effective_routes, artifacts)
-    if scope_routes is not None:
-        generated["router-extension.md"] = render_router_extension(scope_routes, artifacts)
+        generated["ROUTER-EXTENSION.md"] = render_router_extension(effective_routes, artifacts)
     if entrypoints:
         items = entrypoints.items() if isinstance(entrypoints, Mapping) else ((path, "ROUTER.md") for path in entrypoints)
         for path, router_relative in items:
@@ -173,21 +168,43 @@ def plan_materialization(
     previous = dict(previous_lock) if previous_lock is not None else read_lock(root)
     managed = _lock_outputs(previous)
     planned = tuple(PlannedOutput(path, generated[path], modes.get(path, 0o644)) for path in sorted(generated))
+    managed_aliases: dict[str, str] = {}
+    for output in planned:
+        if output.path in managed:
+            continue
+        target = safe_path(root, output.path)
+        if not target.exists():
+            continue
+        aliases = []
+        for candidate in managed:
+            candidate_path = safe_path(root, candidate)
+            if (candidate.casefold() == output.path.casefold() and candidate_path.exists()
+                    and os.path.samefile(target, candidate_path)):
+                aliases.append(candidate)
+        if len(aliases) > 1:
+            raise MaterializationError(f"ambiguous managed path casing for {output.path}")
+        if aliases:
+            managed_aliases[output.path] = aliases[0]
+
+    def managed_key(path: str) -> str:
+        return managed_aliases.get(path, path)
+
     def verify_mode(path: str, target: Path) -> None:
-        record = (previous or {}).get("outputs", {}).get(path)
+        record = (previous or {}).get("outputs", {}).get(managed_key(path))
         if isinstance(record, Mapping) and "mode" in record and target.stat().st_mode & 0o777 != record["mode"]:
             raise MaterializationError(f"managed path mode was locally modified: {path}")
     for output in planned:
         target = safe_path(root, output.path)
-        if target.exists() and output.path not in managed:
+        owner = managed_key(output.path)
+        if target.exists() and owner not in managed:
             raise MaterializationError(f"refusing to overwrite unmanaged path: {output.path}")
-        if target.exists() and output.path in managed and sha256_path(target) != managed[output.path]:
+        if target.exists() and owner in managed and sha256_path(target) != managed[owner]:
             raise MaterializationError(f"managed path was locally modified: {output.path}")
         if target.exists():
             verify_mode(output.path, target)
     removals: list[str] = []
     for path, expected in sorted(managed.items()):
-        if path in generated:
+        if path in generated or path in managed_aliases.values():
             continue
         target = safe_path(root, path)
         if target.exists():

@@ -38,16 +38,19 @@ class CliTests(unittest.TestCase):
                               env=env, text=True, capture_output=True)
 
     def test_install_dry_run_idempotency_router_discovery_and_lookup(self) -> None:
+        local_router = self.scope / "ROUTER.md"
+        local_router.write_text("# Local router\n\nRead ROUTER-EXTENSION.md when present.\n")
         dry = self.run_cli("--json", "install", "--dry-run")
         self.assertEqual(dry.returncode, 0, dry.stderr)
         self.assertFalse((self.scope / ".md-lock.json").exists())
-        self.assertFalse((self.scope / "ROUTER.md").exists())
+        self.assertFalse((self.scope / "ROUTER-EXTENSION.md").exists())
         first = self.run_cli("install")
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertEqual((self.scope / "skills" / "sample" / "SKILL.md").read_text(), "# Sample\n")
         self.assertEqual((self.scope / ".agents" / "skills" / "sample" / "SKILL.md").read_text(), "# Sample\n")
         self.assertEqual((self.scope / ".claude" / "skills" / "sample" / "SKILL.md").read_text(), "# Sample\n")
-        router = (self.scope / "ROUTER.md").read_text()
+        self.assertEqual(local_router.read_text(), "# Local router\n\nRead ROUTER-EXTENSION.md when present.\n")
+        router = (self.scope / "ROUTER-EXTENSION.md").read_text()
         self.assertLess(router.index("skills/sample"), router.index("docs/readme.md"))
         lock_before = (self.scope / ".md-lock.json").read_bytes()
         again = self.run_cli("install")
@@ -64,19 +67,23 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(json.loads(listed.stdout)["artifacts"]), 1)
 
     def test_conflict_drift_and_locked_replay_safety(self) -> None:
-        (self.scope / "ROUTER.md").write_text("private")
+        local_router = self.scope / "ROUTER.md"
+        local_router.write_text("private local router")
+        extension = self.scope / "ROUTER-EXTENSION.md"
+        extension.write_text("private extension")
         conflict = self.run_cli("install")
         self.assertNotEqual(conflict.returncode, 0)
         self.assertIn("unmanaged", conflict.stderr)
         self.assertFalse((self.scope / ".md-lock.json").exists())
-        (self.scope / "ROUTER.md").unlink()
+        self.assertEqual(local_router.read_text(), "private local router")
+        extension.unlink()
         self.assertEqual(self.run_cli("install").returncode, 0)
         self.assertEqual(self.run_cli("install", "--locked").returncode, 0)
-        (self.scope / "ROUTER.md").write_text("edited")
+        self.assertEqual(local_router.read_text(), "private local router")
+        extension.write_text("edited")
         self.assertNotEqual(self.run_cli("doctor").returncode, 0)
         self.assertNotEqual(self.run_cli("install", "--locked").returncode, 0)
-        self.assertEqual((self.scope / "ROUTER.md").read_text(), "edited")
-        (self.scope / "ROUTER.md").write_text("managed restored")
+        self.assertEqual(extension.read_text(), "edited")
 
     def test_locked_requires_source_metadata_and_does_not_upgrade(self) -> None:
         self.assertNotEqual(self.run_cli("install", "--locked").returncode, 0)
@@ -87,6 +94,20 @@ class CliTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("locked source hash changed", result.stderr)
         self.assertEqual((self.scope / "skills" / "sample" / "SKILL.md").read_text(), "# Sample\n")
+
+    def test_reinstall_and_locked_replay_preserve_managed_entrypoint_without_redeclaring_flag(self) -> None:
+        first = self.run_cli("install", "--patch-entrypoint", "AGENTS.md")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        entrypoint = self.scope / "AGENTS.md"
+        before = entrypoint.read_bytes()
+        refresh = self.run_cli("install")
+        self.assertEqual(refresh.returncode, 0, refresh.stderr)
+        self.assertTrue(entrypoint.exists())
+        self.assertEqual(entrypoint.read_bytes(), before)
+        replay = self.run_cli("install", "--locked")
+        self.assertEqual(replay.returncode, 0, replay.stderr)
+        self.assertTrue(entrypoint.exists())
+        self.assertEqual(entrypoint.read_bytes(), before)
 
     def test_nested_all_and_replay_from_subdirectory(self) -> None:
         child = self.scope / "child"
@@ -99,7 +120,8 @@ class CliTests(unittest.TestCase):
         first = self.run_cli("install", "--all")
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertTrue((child / "skills" / "sample" / "SKILL.md").exists())
-        self.assertTrue((child / "ROUTER.md").exists())
+        self.assertTrue((child / "ROUTER-EXTENSION.md").exists())
+        self.assertFalse((child / "ROUTER.md").exists())
         subdir = self.scope / "notes"
         subdir.mkdir()
         replay = self.run_cli("install", "--locked", "--all", cwd=subdir)
@@ -119,6 +141,31 @@ class CliTests(unittest.TestCase):
         self.assertEqual((self.scope / "packages" / "docs" / "draft").read_text(), "# Draft\n")
         listed = json.loads(self.run_cli("--json", "list").stdout)
         self.assertEqual({f"{x['kind']}/{x['key']}" for x in listed["artifacts"]}, {"skills/sample", "docs/draft"})
+
+    def test_migrate_operand_split_plan_and_apply(self) -> None:
+        destination = self.root / "work"
+        destination.mkdir()
+        (destination / "md-package.json").write_text('{"version": 1}\n')
+        note = self.scope / "notes.md"
+        note.write_text("# Notes\n")
+        missing = self.run_cli("migrate", "skills/sample")
+        self.assertNotEqual(missing.returncode, 0)
+        dry = self.run_cli("--json", "migrate", "skills/sample", str(note), str(destination),
+                           "--scope", str(self.scope), "--copy", "--dry-run")
+        self.assertEqual(dry.returncode, 0, dry.stderr)
+        planned = json.loads(dry.stdout)["plan"]
+        self.assertEqual([item["identity"] for item in planned["payloadOperations"]],
+                         ["skills/sample", "docs/notes"])
+        self.assertFalse((destination / "packages").exists())
+        saved = self.root / "migration.json"
+        result = self.run_cli("migrate", "skills/sample", str(note), str(destination),
+                              "--scope", str(self.scope), "--copy", "--plan", str(saved))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        applied = self.run_cli("apply", str(saved))
+        self.assertEqual(applied.returncode, 0, applied.stderr)
+        self.assertTrue((destination / "packages/skills/sample/SKILL.md").exists())
+        self.assertTrue((destination / "packages/docs/notes.md").exists())
+        self.assertTrue(note.exists())
 
     def test_promote_materialized_capture_requires_explicit_flag(self) -> None:
         self.assertEqual(self.run_cli("install").returncode, 0)
@@ -158,7 +205,7 @@ class CliTests(unittest.TestCase):
     def test_generated_descendants_routers_and_discovery_require_capture(self) -> None:
         self.assertEqual(self.run_cli("install").returncode, 0)
         destination = self.root / "target"; destination.mkdir()
-        for relative in ("skills/sample/SKILL.md", "ROUTER.md", "router-extension.md", ".agents/skills/sample/SKILL.md", ".md-lock.json"):
+        for relative in ("skills/sample/SKILL.md", "ROUTER-EXTENSION.md", ".agents/skills/sample/SKILL.md", ".md-lock.json"):
             with self.subTest(relative=relative):
                 base = ["promote", relative, "--to-repo", str(destination), "--dry-run"]
                 missing_identity = self.run_cli(*base, "--from-materialized")
